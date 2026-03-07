@@ -81,8 +81,11 @@ WHERE role = 'student'
   AND (section IS NULL OR section = '');
 
 -- ============================================
--- FIX 3: Fix attendance foreign key constraints
+-- FIX 3: Drop old unique constraint and fix foreign keys
 -- ============================================
+-- This old constraint (student_id, date) prevents multiple lectures per day - WRONG!
+ALTER TABLE public.attendance DROP CONSTRAINT IF EXISTS attendance_student_id_date_key;
+
 ALTER TABLE public.attendance DROP CONSTRAINT IF EXISTS attendance_student_id_fkey;
 ALTER TABLE public.attendance 
   ADD CONSTRAINT attendance_student_id_fkey 
