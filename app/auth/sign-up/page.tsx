@@ -63,7 +63,28 @@ export default function SignUpPage() {
       return
     }
 
-    // Profile is automatically created via database trigger
+    // Manually create profile with section
+    if (data.user) {
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .insert({
+          id: data.user.id,
+          email: data.user.email,
+          full_name: fullName,
+          role,
+          student_id: role === "student" ? studentId : null,
+          department,
+          section: role === "student" ? section : null,
+        })
+
+      if (profileError) {
+        console.error("Profile creation error:", profileError)
+        setError("Account created but profile setup failed. Please contact support.")
+        setLoading(false)
+        return
+      }
+    }
+
     router.push("/auth/sign-up-success")
   }
 
