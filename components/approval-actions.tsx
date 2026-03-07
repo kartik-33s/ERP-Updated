@@ -44,14 +44,12 @@ export function ApprovalActions({ requestId, studentId, eventDate }: ApprovalAct
       // Create attendance record marking student present (OD)
       const { error: attendanceError } = await supabase
         .from("attendance")
-        .upsert({
+        .insert({
           student_id: studentId,
           date: eventDate,
           status: "od",
           od_request_id: requestId,
           marked_by: user?.id,
-        }, {
-          onConflict: "student_id,date"
         })
 
       if (attendanceError) throw attendanceError
