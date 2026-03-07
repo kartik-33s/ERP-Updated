@@ -177,7 +177,34 @@ export default function TeacherAttendancePage() {
       console.log('Teacher ID:', teacherId)
       console.log('Lecture Date:', lectureDate)
       console.log('Lecture Time:', lectureTime)
+      console.log('Lecture Number:', lectureNumber)
       console.log('Number of students:', attendanceRecords.length)
+      console.log('First student record:', attendanceRecords[0])
+      console.log('All attendance records:', JSON.stringify(attendanceRecords, null, 2))
+      
+      // Verify all student IDs exist
+      const studentIds = attendanceRecords.map(r => r.student_id)
+      console.log('Student IDs being sent:', studentIds)
+      
+      // Check if students exist in database
+      const { data: existingStudents, error: checkError } = await supabase
+        .from('profiles')
+        .select('id, student_id, full_name')
+        .in('id', studentIds)
+      
+      console.log('Existing students in DB:', existingStudents)
+      console.log('Check error:', checkError)
+      
+      if (existingStudents) {
+        const existingIds = existingStudents.map(s => s.id)
+        const missingIds = studentIds.filter(id => !existingIds.includes(id))
+        if (missingIds.length > 0) {
+          console.error('Missing student IDs:', missingIds)
+          alert(`Error: ${missingIds.length} student(s) not found in database. Please refresh the page.`)
+          setSaving(false)
+          return
+        }
+      }
       console.log('First student record:', attendanceRecords[0])
       console.log('All attendance records:', attendanceRecords)
 
