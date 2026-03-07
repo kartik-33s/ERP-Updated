@@ -141,35 +141,26 @@ export default function TeacherAttendancePage() {
       // Extract section from selectedClass (e.g., 'section-a' -> 'A')
       const section = selectedClass.split('-')[1].toUpperCase()
 
-      // Create lecture
-      const { data: lecture, error: lectureError } = await supabase
-        .from("lectures")
-        .insert({
-          subject,
-          teacher_id: teacherId,
-          lecture_date: lectureDate,
-          lecture_time: lectureTime,
-          section: section,
-        })
-        .select()
-        .single()
-
-      if (lectureError) throw lectureError
-
-      // Create attendance records
+      // Prepare attendance records
       const attendanceRecords = Array.from(attendance.entries()).map(([studentId, status]) => ({
         student_id: studentId,
-        lecture_id: lecture.id,
         date: lectureDate,
         status,
         marked_by: teacherId,
       }))
 
-      const { error: attendanceError } = await supabase
-        .from("attendance")
-        .insert(attendanceRecords)
+      // Use RPC function to create lecture and attendance in one call
+      const { data: lectureId, error: rpcError } = await supabase
+        .rpc('create_lecture_with_attendance', {
+          p_subject: subject,
+          p_teacher_id: teacherId,
+          p_section: section,
+          p_lecture_date: lectureDate,
+          p_lecture_time: lectureTime,
+          p_attendance_records: attendanceRecords,
+        })
 
-      if (attendanceError) throw attendanceError
+      if (rpcError) throw rpcError
 
       setSuccess(true)
       // Reset form
