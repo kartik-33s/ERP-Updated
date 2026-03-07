@@ -36,7 +36,8 @@ export default function TeacherAttendancePage() {
   const [students, setStudents] = useState<Student[]>([])
   const [subject, setSubject] = useState("")
   const [lectureDate, setLectureDate] = useState(new Date().toISOString().split("T")[0])
-  const [lectureTime, setLectureTime] = useState("09:00")
+  const [lectureNumber, setLectureNumber] = useState<number>(1)
+  const [lectureTime, setLectureTime] = useState("09:15")
   const [attendance, setAttendance] = useState<Map<string, "present" | "absent">>(new Map())
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -44,6 +45,18 @@ export default function TeacherAttendancePage() {
   const [teacherId, setTeacherId] = useState<string | null>(null)
 
   const supabase = createClient()
+
+  // Lecture schedule with times
+  const lectureSchedule = [
+    { number: 1, time: "09:15", endTime: "10:10", label: "Lecture 1 (9:15 - 10:10)" },
+    { number: 2, time: "10:10", endTime: "11:05", label: "Lecture 2 (10:10 - 11:05)" },
+    { number: 3, time: "11:05", endTime: "12:00", label: "Lecture 3 (11:05 - 12:00)" },
+    { number: 4, time: "12:00", endTime: "12:55", label: "Lecture 4 (12:00 - 12:55)" },
+    { number: 5, time: "12:55", endTime: "13:50", label: "Lecture 5 (12:55 - 1:50) - Lunch" },
+    { number: 6, time: "13:50", endTime: "14:45", label: "Lecture 6 (1:50 - 2:45)" },
+    { number: 7, time: "14:45", endTime: "15:40", label: "Lecture 7 (2:45 - 3:40)" },
+    { number: 8, time: "15:40", endTime: "16:35", label: "Lecture 8 (3:40 - 4:35)" },
+  ]
 
   useEffect(() => {
     async function fetchData() {
@@ -128,8 +141,16 @@ export default function TeacherAttendancePage() {
     setAttendance(newAttendance)
   }
 
+  // Update lecture time when lecture number changes
+  useEffect(() => {
+    const lecture = lectureSchedule.find(l => l.number === lectureNumber)
+    if (lecture) {
+      setLectureTime(lecture.time)
+    }
+  }, [lectureNumber])
+
   const saveAttendance = async () => {
-    if (!selectedClass || !subject || !lectureDate || !lectureTime || !teacherId) {
+    if (!selectedClass || !subject || !lectureDate || !lectureNumber || !teacherId) {
       alert("Please fill all required fields")
       return
     }
@@ -168,6 +189,7 @@ export default function TeacherAttendancePage() {
           p_section: section,
           p_lecture_date: lectureDate,
           p_lecture_time: lectureTime,
+          p_lecture_number: lectureNumber,
           p_attendance_records: attendanceRecords,
         })
 
@@ -247,31 +269,39 @@ export default function TeacherAttendancePage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="date" className="flex items-center gap-1">
-                  <Calendar className="h-4 w-4" />
-                  Date
-                </Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={lectureDate}
-                  onChange={(e) => setLectureDate(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="time" className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  Time
-                </Label>
-                <Input
-                  id="time"
-                  type="time"
-                  value={lectureTime}
-                  onChange={(e) => setLectureTime(e.target.value)}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="date" className="flex items-center gap-1">
+                <Calendar className="h-4 w-4" />
+                Date
+              </Label>
+              <Input
+                id="date"
+                type="date"
+                value={lectureDate}
+                onChange={(e) => setLectureDate(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="lecture" className="flex items-center gap-1">
+                <Clock className="h-4 w-4" />
+                Lecture Slot
+              </Label>
+              <Select 
+                value={lectureNumber.toString()} 
+                onValueChange={(value) => setLectureNumber(parseInt(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select lecture slot" />
+                </SelectTrigger>
+                <SelectContent>
+                  {lectureSchedule.map((lecture) => (
+                    <SelectItem key={lecture.number} value={lecture.number.toString()}>
+                      {lecture.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
