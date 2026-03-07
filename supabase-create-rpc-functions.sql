@@ -19,11 +19,26 @@ AS $$
 DECLARE
   v_lecture_id UUID;
   v_record JSONB;
+  v_has_class_id BOOLEAN;
 BEGIN
-  -- Insert lecture
-  INSERT INTO public.lectures (subject, teacher_id, section, lecture_date, lecture_time)
-  VALUES (p_subject, p_teacher_id, p_section, p_lecture_date, p_lecture_time)
-  RETURNING id INTO v_lecture_id;
+  -- Check if class_id column exists
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+      AND table_name = 'lectures' 
+      AND column_name = 'class_id'
+  ) INTO v_has_class_id;
+
+  -- Insert lecture (with or without class_id depending on table structure)
+  IF v_has_class_id THEN
+    INSERT INTO public.lectures (subject, teacher_id, section, lecture_date, lecture_time, class_id)
+    VALUES (p_subject, p_teacher_id, p_section, p_lecture_date, p_lecture_time, NULL)
+    RETURNING id INTO v_lecture_id;
+  ELSE
+    INSERT INTO public.lectures (subject, teacher_id, section, lecture_date, lecture_time)
+    VALUES (p_subject, p_teacher_id, p_section, p_lecture_date, p_lecture_time)
+    RETURNING id INTO v_lecture_id;
+  END IF;
 
   -- Insert attendance records
   FOR v_record IN SELECT * FROM jsonb_array_elements(p_attendance_records)
