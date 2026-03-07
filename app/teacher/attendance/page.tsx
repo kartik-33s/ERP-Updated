@@ -149,6 +149,17 @@ export default function TeacherAttendancePage() {
         marked_by: teacherId,
       }))
 
+      // Debug logging
+      console.log('=== ATTENDANCE DEBUG ===')
+      console.log('Section:', section)
+      console.log('Subject:', subject)
+      console.log('Teacher ID:', teacherId)
+      console.log('Lecture Date:', lectureDate)
+      console.log('Lecture Time:', lectureTime)
+      console.log('Number of students:', attendanceRecords.length)
+      console.log('First student record:', attendanceRecords[0])
+      console.log('All attendance records:', attendanceRecords)
+
       // Use RPC function to create lecture and attendance in one call
       const { data: lectureId, error: rpcError } = await supabase
         .rpc('create_lecture_with_attendance', {
@@ -159,6 +170,9 @@ export default function TeacherAttendancePage() {
           p_lecture_time: lectureTime,
           p_attendance_records: attendanceRecords,
         })
+
+      console.log('RPC Response - Lecture ID:', lectureId)
+      console.log('RPC Response - Error:', rpcError)
 
       if (rpcError) throw rpcError
 

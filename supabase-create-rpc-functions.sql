@@ -20,6 +20,8 @@ DECLARE
   v_lecture_id UUID;
   v_record JSONB;
   v_has_class_id BOOLEAN;
+  v_student_id UUID;
+  v_student_exists BOOLEAN;
 BEGIN
   -- Check if class_id column exists
   SELECT EXISTS (
@@ -40,12 +42,27 @@ BEGIN
     RETURNING id INTO v_lecture_id;
   END IF;
 
+  RAISE NOTICE 'Created lecture with ID: %', v_lecture_id;
+
   -- Insert attendance records
   FOR v_record IN SELECT * FROM jsonb_array_elements(p_attendance_records)
   LOOP
+    v_student_id := (v_record->>'student_id')::UUID;
+    
+    -- Check if student exists
+    SELECT EXISTS (
+      SELECT 1 FROM public.profiles WHERE id = v_student_id
+    ) INTO v_student_exists;
+    
+    IF NOT v_student_exists THEN
+      RAISE EXCEPTION 'Student with ID % does not exist in profiles table', v_student_id;
+    END IF;
+    
+    RAISE NOTICE 'Inserting attendance for student: %', v_student_id;
+    
     INSERT INTO public.attendance (student_id, lecture_id, date, status, marked_by)
     VALUES (
-      (v_record->>'student_id')::UUID,
+      v_student_id,
       v_lecture_id,
       (v_record->>'date')::DATE,
       v_record->>'status',
@@ -53,7 +70,12 @@ BEGIN
     );
   END LOOP;
 
+  RAISE NOTICE 'Successfully created lecture and % attendance records', jsonb_array_length(p_attendance_records);
+  
   RETURN v_lecture_id;
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE EXCEPTION 'Error in create_lecture_with_attendance: % (SQLSTATE: %)', SQLERRM, SQLSTATE;
 END;
 $$;
 
