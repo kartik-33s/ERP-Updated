@@ -56,10 +56,7 @@ BEGIN
         p_lecture_date,
         v_record->>'status',
         p_teacher_id
-      )
-      ON CONFLICT (student_id, lecture_id) DO UPDATE
-      SET status = EXCLUDED.status,
-          marked_by = EXCLUDED.marked_by;
+      );
     END IF;
   END LOOP;
 

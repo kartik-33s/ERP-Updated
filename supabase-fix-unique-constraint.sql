@@ -1,37 +1,62 @@
 -- ========================================
--- FIX: Add missing UNIQUE constraint on attendance table
--- This fixes the error: "there is no unique or exclusion constraint 
--- matching the ON CONFLICT specification"
--- 
--- Run this in Supabase SQL Editor → Click "RUN"
+-- PASTE THIS INTO SUPABASE SQL EDITOR AND CLICK "RUN"
+-- Fixes: "there is no unique or exclusion constraint matching the ON CONFLICT specification"
 -- ========================================
 
--- Step 1: Check if the unique constraint already exists
-SELECT conname, contype 
-FROM pg_constraint 
-WHERE conrelid = 'public.attendance'::regclass;
+-- Drop old function versions
+DROP FUNCTION IF EXISTS public.create_lecture_with_attendance(TEXT, UUID, TEXT, DATE, TIME, JSONB);
+DROP FUNCTION IF EXISTS public.create_lecture_with_attendance(TEXT, UUID, TEXT, DATE, TIME, INTEGER, JSONB);
 
--- Step 2: Add the unique constraint (student_id, lecture_id)
--- This is required by the create_lecture_with_attendance RPC function
--- which uses ON CONFLICT (student_id, lecture_id)
-ALTER TABLE public.attendance 
-  DROP CONSTRAINT IF EXISTS attendance_student_id_lecture_id_key;
+-- Recreate the function WITHOUT ON CONFLICT (not needed since lecture_id is always new)
+CREATE OR REPLACE FUNCTION public.create_lecture_with_attendance(
+  p_subject TEXT,
+  p_teacher_id UUID,
+  p_section TEXT,
+  p_lecture_date DATE,
+  p_lecture_time TIME,
+  p_lecture_number INTEGER,
+  p_attendance_records JSONB
+)
+RETURNS UUID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_lecture_id UUID;
+  v_record JSONB;
+  v_student_id UUID;
+  v_student_exists BOOLEAN;
+BEGIN
+  INSERT INTO public.lectures (subject, teacher_id, section, lecture_date, lecture_time, lecture_number)
+  VALUES (p_subject, p_teacher_id, p_section, p_lecture_date, p_lecture_time, p_lecture_number)
+  RETURNING id INTO v_lecture_id;
 
-ALTER TABLE public.attendance 
-  ADD CONSTRAINT attendance_student_id_lecture_id_key 
-  UNIQUE (student_id, lecture_id);
+  FOR v_record IN SELECT * FROM jsonb_array_elements(p_attendance_records)
+  LOOP
+    v_student_id := (v_record->>'student_id')::UUID;
+    
+    SELECT EXISTS(
+      SELECT 1 FROM public.profiles 
+      WHERE id = v_student_id AND role = 'student'
+    ) INTO v_student_exists;
+    
+    IF v_student_exists THEN
+      INSERT INTO public.attendance (student_id, lecture_id, date, status, marked_by)
+      VALUES (
+        v_student_id,
+        v_lecture_id,
+        p_lecture_date,
+        v_record->>'status',
+        p_teacher_id
+      );
+    END IF;
+  END LOOP;
 
--- Step 3: Also add a unique constraint for (student_id, date) 
--- This is used by the OD approval flow in approval-actions.tsx
--- Only add if your schema supports one attendance record per student per date
--- ALTER TABLE public.attendance 
---   ADD CONSTRAINT attendance_student_id_date_key 
---   UNIQUE (student_id, date);
+  RETURN v_lecture_id;
+END;
+$$;
 
--- Step 4: Verify the constraint was added
-SELECT conname, contype, 
-       pg_get_constraintdef(oid) as constraint_definition
-FROM pg_constraint 
-WHERE conrelid = 'public.attendance'::regclass;
+-- Grant permissions
+GRANT EXECUTE ON FUNCTION public.create_lecture_with_attendance(TEXT, UUID, TEXT, DATE, TIME, INTEGER, JSONB) TO authenticated;
 
-SELECT 'SUCCESS! Unique constraint added to attendance table.' as result;
+SELECT 'SUCCESS! Function fixed - attendance should work now.' as result;
