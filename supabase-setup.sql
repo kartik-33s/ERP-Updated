@@ -28,16 +28,43 @@ CREATE POLICY "Users can update their own profile"
 -- Create function to handle new user creation
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  v_student_id TEXT;
+  v_section TEXT;
+  v_role TEXT;
 BEGIN
+  -- Get values from metadata
+  v_student_id := NEW.raw_user_meta_data->>'student_id';
+  v_role := NEW.raw_user_meta_data->>'role';
+  v_section := NEW.raw_user_meta_data->>'section';
+  
+  -- If section is not provided but student_id is, calculate it
+  IF v_role = 'student' AND v_student_id IS NOT NULL AND v_section IS NULL THEN
+    DECLARE
+      v_roll_num INTEGER;
+    BEGIN
+      v_roll_num := CAST(v_student_id AS INTEGER);
+      IF v_roll_num >= 2320000 AND v_roll_num <= 2320100 THEN
+        v_section := 'A';
+      ELSIF v_roll_num >= 2320101 AND v_roll_num <= 2320200 THEN
+        v_section := 'B';
+      ELSE
+        v_section := 'A'; -- Default
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      v_section := 'A'; -- Default on error
+    END;
+  END IF;
+
   INSERT INTO public.profiles (id, email, full_name, role, student_id, department, section)
   VALUES (
     NEW.id,
     NEW.email,
     NEW.raw_user_meta_data->>'full_name',
-    NEW.raw_user_meta_data->>'role',
-    NEW.raw_user_meta_data->>'student_id',
+    v_role,
+    v_student_id,
     NEW.raw_user_meta_data->>'department',
-    NEW.raw_user_meta_data->>'section'
+    v_section
   );
   RETURN NEW;
 END;

@@ -138,15 +138,18 @@ export default function TeacherAttendancePage() {
     setSuccess(false)
 
     try {
+      // Extract section from selectedClass (e.g., 'section-a' -> 'A')
+      const section = selectedClass.split('-')[1].toUpperCase()
+
       // Create lecture
       const { data: lecture, error: lectureError } = await supabase
         .from("lectures")
         .insert({
-          class_id: selectedClass,
           subject,
           teacher_id: teacherId,
           lecture_date: lectureDate,
           lecture_time: lectureTime,
+          section: section,
         })
         .select()
         .single()
