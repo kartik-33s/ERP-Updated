@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu"
-import { GraduationCap, LayoutDashboard, FileCheck, Users, User, LogOut, ClipboardCheck, Table2 } from "lucide-react"
+import { GraduationCap, LayoutDashboard, FileCheck, Users, User, LogOut, ClipboardCheck, Table2, QrCode, FileText } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface Profile {
@@ -35,7 +35,9 @@ export function TeacherNav({ profile }: { profile: Profile }) {
   const navItems = [
     { href: "/teacher/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/teacher/attendance", label: "Mark Attendance", icon: ClipboardCheck },
+    { href: "/teacher/qr-attendance", label: "QR Attendance", icon: QrCode },
     { href: "/teacher/attendance-table", label: "Attendance Table", icon: Table2 },
+    { href: "/teacher/attendance-logs", label: "Attendance Logs", icon: FileText },
     { href: "/teacher/od-requests", label: "OD Requests", icon: FileCheck },
     { href: "/teacher/students", label: "Students", icon: Users },
   ]

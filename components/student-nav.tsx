@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu"
-import { GraduationCap, LayoutDashboard, FileText, Calendar, User, LogOut, BookOpen } from "lucide-react"
+import { GraduationCap, LayoutDashboard, FileText, Calendar, User, LogOut, BookOpen, QrCode } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface Profile {
@@ -35,6 +35,7 @@ export function StudentNav({ profile }: { profile: Profile }) {
 
   const navItems = [
     { href: "/student/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/student/qr-scanner", label: "QR Scanner", icon: QrCode },
     { href: "/student/od-request", label: "New OD Request", icon: FileText },
     { href: "/student/attendance", label: "Attendance", icon: Calendar },
     { href: "/student/lectures", label: "Lecture Attendance", icon: BookOpen },
