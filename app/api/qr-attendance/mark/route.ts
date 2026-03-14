@@ -5,14 +5,19 @@ import { headers } from "next/headers"
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    console.log('Mark attendance - Auth check:', { userId: user?.id, authError })
 
     if (!user) {
+      console.error('Mark attendance - No user authenticated')
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const body = await request.json()
     const { sessionCode, latitude, longitude, deviceInfo } = body
+
+    console.log('Mark attendance - Request:', { sessionCode, latitude, longitude, userId: user.id })
 
     if (!sessionCode || latitude === undefined || longitude === undefined) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
@@ -28,10 +33,11 @@ export async function POST(request: Request) {
     // Get student profile to check section
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('section')
+      .select('section, role')
       .eq('id', user.id)
-      .eq('role', 'student')
       .single()
+
+    console.log('Student profile:', { profile, profileError })
 
     if (profileError || !profile) {
       return NextResponse.json({ 
@@ -40,7 +46,35 @@ export async function POST(request: Request) {
       })
     }
 
-    // Get session
+    if (profile.role !== 'student') {
+      return NextResponse.json({ 
+        success: false,
+        message: 'Only students can mark attendance'
+      })
+    }
+
+    // Get session - try without any filters first for debugging
+    const { data: allSessionsDebug, error: allSessionsDebugError } = await supabase
+      .from('attendance_sessions')
+      .select('session_code, section, is_active, expires_at')
+      .eq('session_code', sessionCode.toUpperCase())
+
+    console.log('Debug - All sessions query (no filters):', { 
+      sessionCode: sessionCode.toUpperCase(), 
+      allSessionsDebug, 
+      allSessionsDebugError,
+      studentSection: profile.section
+    })
+
+    // Get session - try without is_active filter first for debugging
+    const { data: allSessions, error: allSessionsError } = await supabase
+      .from('attendance_sessions')
+      .select('*')
+      .eq('session_code', sessionCode.toUpperCase())
+
+    console.log('All sessions with this code:', { sessionCode: sessionCode.toUpperCase(), allSessions, allSessionsError })
+
+    // Get session with active filter
     const { data: session, error: sessionError } = await supabase
       .from('attendance_sessions')
       .select('*')
@@ -48,7 +82,26 @@ export async function POST(request: Request) {
       .eq('is_active', true)
       .single()
 
+    console.log('Active session lookup:', { sessionCode: sessionCode.toUpperCase(), session, sessionError })
+
     if (sessionError || !session) {
+      // Check if session exists but is inactive
+      if (allSessions && allSessions.length > 0) {
+        const inactiveSession = allSessions[0]
+        if (!inactiveSession.is_active) {
+          return NextResponse.json({ 
+            success: false,
+            message: 'This session has been ended by the teacher'
+          })
+        }
+        if (new Date() > new Date(inactiveSession.expires_at)) {
+          return NextResponse.json({ 
+            success: false,
+            message: `Session expired at ${new Date(inactiveSession.expires_at).toLocaleTimeString()}`
+          })
+        }
+      }
+      
       return NextResponse.json({ 
         success: false,
         message: 'Invalid or expired session'
@@ -116,7 +169,7 @@ export async function POST(request: Request) {
           lecture_id: session.lecture_id,
           student_id: user.id,
           status: 'present',
-          marked_at: new Date().toISOString()
+          date: session.lecture_date
         })
         .select()
         .single()
@@ -130,35 +183,42 @@ export async function POST(request: Request) {
     }
 
     // Create attendance log
+    const logInsertData = {
+      session_id: session.id,
+      student_id: user.id,
+      attendance_id: attendanceId,
+      student_latitude: latitude,
+      student_longitude: longitude,
+      distance_meters: distance,
+      location_verified: locationVerified,
+      status: status,
+      rejection_reason: rejectionReason,
+      device_info: deviceInfo || {},
+      ip_address: ipAddress,
+      user_agent: userAgent
+    }
+
+    console.log('Creating attendance log:', logInsertData)
+
     const { data: logData, error: logError } = await supabase
       .from('attendance_logs')
-      .insert({
-        session_id: session.id,
-        student_id: user.id,
-        attendance_id: attendanceId,
-        student_latitude: latitude,
-        student_longitude: longitude,
-        distance_meters: distance,
-        location_verified: locationVerified,
-        status: status,
-        rejection_reason: rejectionReason,
-        device_info: deviceInfo || {},
-        ip_address: ipAddress,
-        user_agent: userAgent
-      })
+      .insert(logInsertData)
       .select()
       .single()
 
     if (logError) {
       console.error('Error creating log:', logError)
-      return NextResponse.json({ error: logError.message }, { status: 500 })
+      // Don't fail the request if log creation fails
+      // The attendance was already marked successfully
+    } else {
+      console.log('Log created successfully:', logData)
     }
 
     return NextResponse.json({ 
       success: locationVerified,
       message: locationVerified ? 'Attendance marked successfully' : rejectionReason,
       attendanceId: attendanceId,
-      logId: logData.id
+      logId: logData?.id
     })
   } catch (error: any) {
     console.error('Error in mark QR attendance:', error)

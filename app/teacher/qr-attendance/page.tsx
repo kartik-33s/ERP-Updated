@@ -69,7 +69,12 @@ export default function QRAttendancePage() {
 
   const fetchActiveSession = async () => {
     try {
-      const response = await fetch('/api/qr-session/active')
+      const response = await fetch('/api/qr-session/active', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      })
       
       if (!response.ok) {
         console.error('Failed to fetch active session:', response.status, response.statusText)
@@ -89,17 +94,20 @@ export default function QRAttendancePage() {
       }
 
       const data = await response.json()
+      console.log('Active session data:', data)
       
       if (data.success && data.session) {
         setActiveSession(data.session)
-        // Generate QR code
+        // Generate QR code with timestamp to prevent caching
         const qrData = JSON.stringify({
           code: data.session.session_code,
           subject: data.session.subject,
-          section: data.session.section
+          section: data.session.section,
+          timestamp: Date.now()
         })
         const qrUrl = await QRCode.toDataURL(qrData, { width: 400, margin: 2 })
         setQrCodeUrl(qrUrl)
+        console.log('QR code generated for session:', data.session.session_code)
       } else {
         setActiveSession(null)
         setQrCodeUrl(null)
@@ -147,6 +155,30 @@ export default function QRAttendancePage() {
 
     setCreating(true)
     try {
+      console.log('Creating session with:', {
+        subject,
+        section,
+        lectureDate,
+        lectureTime,
+        lectureNumber,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        radiusMeters,
+        durationMinutes
+      })
+
+      // First, deactivate any existing active sessions
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { error: deactivateError } = await supabase
+          .from('attendance_sessions')
+          .update({ is_active: false })
+          .eq('teacher_id', user.id)
+          .eq('is_active', true)
+        
+        console.log('Deactivated old sessions:', { deactivateError })
+      }
+
       const response = await fetch('/api/qr-session/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -164,16 +196,29 @@ export default function QRAttendancePage() {
       })
 
       const data = await response.json()
+      console.log('Session creation response:', data)
       
       if (data.success) {
+        // Clear old state
+        setActiveSession(null)
+        setQrCodeUrl(null)
+        
+        // Wait a bit for database to update
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        // Fetch the new session
         await fetchActiveSession()
+        
         // Reset form
         setSubject("")
         setSection("")
+        
+        console.log('New session should be displayed now')
       } else {
         alert("Error creating session: " + data.error)
       }
     } catch (error: any) {
+      console.error('Error creating session:', error)
       alert("Error: " + error.message)
     } finally {
       setCreating(false)
@@ -254,12 +299,33 @@ export default function QRAttendancePage() {
                 {/* QR Code */}
                 <div className="flex flex-col items-center justify-center p-6 bg-white rounded-lg">
                   {qrCodeUrl && (
-                    <img src={qrCodeUrl} alt="QR Code" className="w-full max-w-sm" />
+                    <>
+                      <div className="mb-4 p-4 bg-blue-50 rounded-lg border-2 border-blue-500">
+                        <p className="text-xs text-blue-600 font-semibold mb-1">SCAN THIS CODE:</p>
+                        <p className="text-4xl font-bold text-blue-900 tracking-wider">{activeSession.session_code}</p>
+                      </div>
+                      <img 
+                        src={qrCodeUrl} 
+                        alt="QR Code" 
+                        className="w-full max-w-sm border-4 border-blue-500 rounded-lg"
+                        key={activeSession.session_code} 
+                      />
+                      <div className="mt-4 text-center">
+                        <p className="text-sm text-gray-600 mt-1">Session Code (for manual entry)</p>
+                        <p className="text-xs text-gray-400 mt-2">
+                          Created: {new Date(activeSession.starts_at).toLocaleTimeString()}
+                        </p>
+                        <Button 
+                          onClick={fetchActiveSession} 
+                          variant="outline" 
+                          size="sm"
+                          className="mt-3"
+                        >
+                          Refresh QR Code
+                        </Button>
+                      </div>
+                    </>
                   )}
-                  <div className="mt-4 text-center">
-                    <p className="text-2xl font-bold text-gray-900">{activeSession.session_code}</p>
-                    <p className="text-sm text-gray-600 mt-1">Session Code</p>
-                  </div>
                 </div>
 
                 {/* Session Info */}

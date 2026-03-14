@@ -15,6 +15,8 @@ export async function GET(request: Request) {
     }
 
     // Get active session with statistics
+    const now = new Date()
+    
     const { data: sessions, error: sessionError } = await supabase
       .from('attendance_sessions')
       .select(`
@@ -28,6 +30,7 @@ export async function GET(request: Request) {
       `)
       .eq('teacher_id', user.id)
       .eq('is_active', true)
+      .gt('expires_at', now.toISOString())
       .order('created_at', { ascending: false })
       .limit(1)
 
@@ -41,6 +44,14 @@ export async function GET(request: Request) {
     }
 
     if (!sessions || sessions.length === 0) {
+      // Auto-deactivate expired sessions
+      await supabase
+        .from('attendance_sessions')
+        .update({ is_active: false })
+        .eq('teacher_id', user.id)
+        .eq('is_active', true)
+        .lt('expires_at', now.toISOString())
+      
       return NextResponse.json({ 
         success: true,
         session: null
@@ -48,16 +59,6 @@ export async function GET(request: Request) {
     }
 
     const session = sessions[0]
-
-    // Check if still valid
-    const now = new Date()
-    const expiresAt = new Date(session.expires_at)
-    if (now > expiresAt) {
-      return NextResponse.json({ 
-        success: true,
-        session: null
-      })
-    }
 
     // Get scan statistics
     const { data: logs } = await supabase

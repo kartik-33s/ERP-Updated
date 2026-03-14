@@ -137,23 +137,37 @@ export default function QRScannerPage() {
   }
 
   const handleQRCodeDetected = (qrData: string) => {
+    console.log('QR Code detected:', qrData)
+    
     try {
       const parsed = JSON.parse(qrData)
+      console.log('Parsed QR data:', parsed)
+      
       if (parsed.code) {
+        console.log('Using session code from QR:', parsed.code)
         setSessionCode(parsed.code)
         stopScanning()
         setTimeout(() => markAttendance(parsed.code), 500)
+      } else {
+        console.error('QR data missing code field:', parsed)
+        setResult({ success: false, message: 'Invalid QR code format' })
+        stopScanning()
       }
     } catch (error) {
+      console.log('QR data is not JSON, treating as plain code:', qrData)
       // If not JSON, treat as plain session code
-      setSessionCode(qrData)
+      const cleanCode = qrData.trim().toUpperCase()
+      console.log('Using cleaned code:', cleanCode)
+      setSessionCode(cleanCode)
       stopScanning()
-      setTimeout(() => markAttendance(qrData), 500)
+      setTimeout(() => markAttendance(cleanCode), 500)
     }
   }
 
   const markAttendance = async (code?: string) => {
     const codeToUse = code || sessionCode
+    
+    console.log('Marking attendance with code:', codeToUse)
     
     if (!codeToUse || !location) {
       alert("Please enter session code and enable location")
@@ -171,6 +185,12 @@ export default function QRScannerPage() {
         screenResolution: `${window.screen.width}x${window.screen.height}`
       }
 
+      console.log('Sending request with:', {
+        sessionCode: codeToUse.toUpperCase(),
+        latitude: location.latitude,
+        longitude: location.longitude
+      })
+
       const response = await fetch('/api/qr-attendance/mark', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -183,12 +203,15 @@ export default function QRScannerPage() {
       })
 
       const data = await response.json()
+      console.log('Response:', data)
+      
       setResult({ success: data.success, message: data.message })
       
       if (data.success) {
         setSessionCode("")
       }
     } catch (error: any) {
+      console.error('Error marking attendance:', error)
       setResult({ success: false, message: "Error: " + error.message })
     } finally {
       setMarking(false)
@@ -204,15 +227,26 @@ export default function QRScannerPage() {
 
       {result && (
         <Card className={result.success ? "border-accent bg-accent/10" : "border-destructive bg-destructive/10"}>
-          <CardContent className="py-4 flex items-center gap-3">
-            {result.success ? (
-              <CheckCircle2 className="h-5 w-5 text-accent" />
-            ) : (
-              <XCircle className="h-5 w-5 text-destructive" />
-            )}
-            <span className={result.success ? "text-accent font-medium" : "text-destructive font-medium"}>
-              {result.message}
-            </span>
+          <CardContent className="py-4">
+            <div className="flex items-center gap-3">
+              {result.success ? (
+                <CheckCircle2 className="h-5 w-5 text-accent flex-shrink-0" />
+              ) : (
+                <XCircle className="h-5 w-5 text-destructive flex-shrink-0" />
+              )}
+              <div className="flex-1">
+                <span className={result.success ? "text-accent font-medium" : "text-destructive font-medium"}>
+                  {result.message}
+                </span>
+              </div>
+              <Button 
+                onClick={() => setResult(null)} 
+                variant="ghost" 
+                size="sm"
+              >
+                Dismiss
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -433,20 +467,25 @@ export default function QRScannerPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Instructions */}
       <Card>
         <CardHeader>
-          <CardTitle>How to Mark Attendance</CardTitle>
+          <CardTitle>Quick Instructions</CardTitle>
         </CardHeader>
         <CardContent>
-          <ol className="space-y-2 list-decimal list-inside text-muted-foreground">
-            <li>Make sure your location is enabled and accurate</li>
-            <li>Choose either "Scan QR Code" or "Enter Code" tab</li>
-            <li>For scanning: Click "Start Camera" and point at the QR code</li>
-            <li>For manual: Enter the 8-character code shown by your teacher</li>
-            <li>You must be within the classroom boundary (typically 100m radius)</li>
-            <li>Attendance will be marked only if location verification succeeds</li>
-          </ol>
+          <div className="space-y-3">
+            <div className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
+              <p className="font-semibold text-blue-900">Recommended: Use Manual Entry</p>
+              <p className="text-sm text-blue-700 mt-1">
+                Ask your teacher for the session code and enter it manually in the "Enter Code" tab. This is faster and more reliable.
+              </p>
+            </div>
+            <div className="p-3 bg-yellow-50 border-l-4 border-yellow-500 rounded">
+              <p className="font-semibold text-yellow-900">QR Scanner Issues?</p>
+              <p className="text-sm text-yellow-700 mt-1">
+                If scanning doesn't work, close your browser completely and reopen it, or use incognito/private mode.
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
