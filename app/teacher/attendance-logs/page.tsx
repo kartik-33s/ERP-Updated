@@ -44,6 +44,23 @@ export default function AttendanceLogsPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
+      // First get teacher's sessions
+      const { data: sessions, error: sessionsError } = await supabase
+        .from('attendance_sessions')
+        .select('id')
+        .eq('teacher_id', user.id)
+
+      if (sessionsError) throw sessionsError
+
+      const sessionIds = sessions?.map(s => s.id) || []
+
+      if (sessionIds.length === 0) {
+        setLogs([])
+        setLoading(false)
+        return
+      }
+
+      // Then get logs for those sessions
       const { data, error } = await supabase
         .from('attendance_logs')
         .select(`
@@ -51,6 +68,7 @@ export default function AttendanceLogsPage() {
           profiles!attendance_logs_student_id_fkey(full_name, student_id),
           attendance_sessions(subject, section, lecture_number)
         `)
+        .in('session_id', sessionIds)
         .order('marked_at', { ascending: false })
         .limit(100)
 

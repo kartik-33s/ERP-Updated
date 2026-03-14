@@ -25,6 +25,21 @@ export async function POST(request: Request) {
     const realIp = headersList.get('x-real-ip')
     const ipAddress = forwardedFor?.split(',')[0] || realIp || '0.0.0.0'
 
+    // Get student profile to check section
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('section')
+      .eq('id', user.id)
+      .eq('role', 'student')
+      .single()
+
+    if (profileError || !profile) {
+      return NextResponse.json({ 
+        success: false,
+        message: 'Student profile not found'
+      })
+    }
+
     // Get session
     const { data: session, error: sessionError } = await supabase
       .from('attendance_sessions')
@@ -50,6 +65,29 @@ export async function POST(request: Request) {
       })
     }
 
+    // Verify student section matches session section
+    if (profile.section !== session.section) {
+      return NextResponse.json({ 
+        success: false,
+        message: 'This session is not for your section'
+      })
+    }
+
+    // Check if student already marked attendance for this session
+    const { data: existingLog } = await supabase
+      .from('attendance_logs')
+      .select('id')
+      .eq('session_id', session.id)
+      .eq('student_id', user.id)
+      .single()
+
+    if (existingLog) {
+      return NextResponse.json({ 
+        success: false,
+        message: 'You have already marked attendance for this session'
+      })
+    }
+
     // Calculate distance using Haversine formula
     const toRad = (value: number) => (value * Math.PI) / 180
     const R = 6371000 // Earth radius in meters
@@ -68,12 +106,36 @@ export async function POST(request: Request) {
       ? null 
       : `Location verification failed. Distance: ${distance.toFixed(2)}m (Required: <${session.radius_meters}m)`
 
+    let attendanceId = null
+
+    // If location verified, create actual attendance record
+    if (locationVerified) {
+      const { data: attendanceData, error: attendanceError } = await supabase
+        .from('attendance')
+        .insert({
+          lecture_id: session.lecture_id,
+          student_id: user.id,
+          status: 'present',
+          marked_at: new Date().toISOString()
+        })
+        .select()
+        .single()
+
+      if (attendanceError) {
+        console.error('Error creating attendance:', attendanceError)
+        return NextResponse.json({ error: attendanceError.message }, { status: 500 })
+      }
+
+      attendanceId = attendanceData.id
+    }
+
     // Create attendance log
     const { data: logData, error: logError } = await supabase
       .from('attendance_logs')
       .insert({
         session_id: session.id,
         student_id: user.id,
+        attendance_id: attendanceId,
         student_latitude: latitude,
         student_longitude: longitude,
         distance_meters: distance,
@@ -95,7 +157,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ 
       success: locationVerified,
       message: locationVerified ? 'Attendance marked successfully' : rejectionReason,
-      attendanceId: locationVerified ? crypto.randomUUID() : null,
+      attendanceId: attendanceId,
       logId: logData.id
     })
   } catch (error: any) {

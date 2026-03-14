@@ -70,6 +70,24 @@ export default function QRAttendancePage() {
   const fetchActiveSession = async () => {
     try {
       const response = await fetch('/api/qr-session/active')
+      
+      if (!response.ok) {
+        console.error('Failed to fetch active session:', response.status, response.statusText)
+        setActiveSession(null)
+        setQrCodeUrl(null)
+        setLoading(false)
+        return
+      }
+
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Expected JSON response but got:', contentType)
+        setActiveSession(null)
+        setQrCodeUrl(null)
+        setLoading(false)
+        return
+      }
+
       const data = await response.json()
       
       if (data.success && data.session) {
@@ -88,6 +106,8 @@ export default function QRAttendancePage() {
       }
     } catch (error) {
       console.error('Error fetching active session:', error)
+      setActiveSession(null)
+      setQrCodeUrl(null)
     } finally {
       setLoading(false)
     }

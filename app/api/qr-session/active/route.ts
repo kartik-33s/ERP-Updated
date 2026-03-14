@@ -1,13 +1,17 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (authError || !user) {
+      return NextResponse.json({ 
+        success: false,
+        error: "Unauthorized",
+        session: null 
+      }, { status: 401 })
     }
 
     // Get active session with statistics
@@ -29,7 +33,11 @@ export async function GET() {
 
     if (sessionError) {
       console.error('Error fetching active session:', sessionError)
-      return NextResponse.json({ error: sessionError.message }, { status: 500 })
+      return NextResponse.json({ 
+        success: false,
+        error: sessionError.message,
+        session: null 
+      }, { status: 500 })
     }
 
     if (!sessions || sessions.length === 0) {
@@ -76,6 +84,10 @@ export async function GET() {
     })
   } catch (error: any) {
     console.error('Error in get active session:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ 
+      success: false,
+      error: error.message,
+      session: null 
+    }, { status: 500 })
   }
 }
