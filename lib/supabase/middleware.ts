@@ -29,34 +29,46 @@ export async function updateSession(request: NextRequest) {
     },
   )
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  try {
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Auth timeout')), 5000)
+    )
+    
+    const authPromise = supabase.auth.getUser()
+    
+    const {
+      data: { user },
+    } = await Promise.race([authPromise, timeoutPromise]) as any
 
-  // Protect dashboard routes
-  if (
-    (request.nextUrl.pathname.startsWith('/student') ||
-      request.nextUrl.pathname.startsWith('/teacher')) &&
-    !user
-  ) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/auth/login'
-    return NextResponse.redirect(url)
-  }
-
-  // Redirect authenticated users from auth pages to their dashboard
-  if (request.nextUrl.pathname.startsWith('/auth') && user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (profile) {
+    // Protect dashboard routes
+    if (
+      (request.nextUrl.pathname.startsWith('/student') ||
+        request.nextUrl.pathname.startsWith('/teacher')) &&
+      !user
+    ) {
       const url = request.nextUrl.clone()
-      url.pathname = profile.role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard'
+      url.pathname = '/auth/login'
       return NextResponse.redirect(url)
     }
+
+    // Redirect authenticated users from auth pages to their dashboard
+    if (request.nextUrl.pathname.startsWith('/auth') && user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+      if (profile) {
+        const url = request.nextUrl.clone()
+        url.pathname = profile.role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard'
+        return NextResponse.redirect(url)
+      }
+    }
+  } catch (error) {
+    console.error('Middleware error:', error)
+    // Continue without auth check if timeout occurs
   }
 
   return supabaseResponse
