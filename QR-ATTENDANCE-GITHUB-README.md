@@ -2,7 +2,7 @@
 
 ## 🚀 Latest Update: QR Attendance Feature
 
-This repository now includes a complete **QR Code & GPS-based Attendance Tracking System** that prevents proxy attendance and provides real-time monitoring.
+This repository now includes a complete **QR Code & GPS-based Attendance Tracking System** that prevents proxy attendance and provides real-time monitoring.CHECKING
 
 ---
 
